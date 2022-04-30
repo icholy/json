@@ -1201,3 +1201,32 @@ func TestMarshalerError(t *testing.T) {
 		}
 	}
 }
+
+type MarshalNil struct{}
+
+func (MarshalNil) MarshalJSON() ([]byte, error) { return nil, nil }
+
+func TestMarshalerReturnsNilBytes(t *testing.T) {
+	want := []byte("null")
+	got, err := Marshal(MarshalNil{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("want %s, got: %s", string(want), string(got))
+	}
+}
+
+func TestMarsherOmitEmptyNil(t *testing.T) {
+	want := []byte("{}")
+	var s struct {
+		X MarshalNil `json:",omitempty"`
+	}
+	got, err := Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("want %s, got %s", string(want), string(got))
+	}
+}

@@ -364,6 +364,7 @@ type encOpts struct {
 	quoted bool
 	// escapeHTML causes '<', '>', and '&' to be escaped in JSON strings.
 	escapeHTML bool
+	omitEmpty  bool
 }
 
 type encoderFunc func(e *encodeState, v reflect.Value, opts encOpts)
@@ -477,8 +478,15 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 	b, err := m.MarshalJSON()
 	if err == nil {
-		// copy JSON into buffer, checking validity.
-		err = compact(&e.Buffer, b, opts.escapeHTML)
+		if b == nil {
+			if opts.omitEmpty {
+				return
+			}
+			_, err = e.WriteString("null")
+		} else {
+			// copy JSON into buffer, checking validity.
+			err = compact(&e.Buffer, b, opts.escapeHTML)
+		}
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
@@ -494,8 +502,15 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	m := va.Interface().(Marshaler)
 	b, err := m.MarshalJSON()
 	if err == nil {
-		// copy JSON into buffer, checking validity.
-		err = compact(&e.Buffer, b, opts.escapeHTML)
+		if b == nil {
+			if opts.omitEmpty {
+				return
+			}
+			_, err = e.WriteString("null")
+		} else {
+			// copy JSON into buffer, checking validity.
+			err = compact(&e.Buffer, b, opts.escapeHTML)
+		}
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
@@ -749,15 +764,22 @@ FieldLoop:
 		if f.omitEmpty && isEmptyValue(fv) {
 			continue
 		}
+		keyIdx := e.Len()
 		e.WriteByte(next)
-		next = ','
 		if opts.escapeHTML {
 			e.WriteString(f.nameEscHTML)
 		} else {
 			e.WriteString(f.nameNonEsc)
 		}
 		opts.quoted = f.quoted
+		opts.omitEmpty = f.omitEmpty
+		valueIdx := e.Len()
 		f.encoder(e, fv, opts)
+		if e.Len() == valueIdx {
+			e.Truncate(keyIdx)
+			continue
+		}
+		next = ','
 	}
 	if next == '{' {
 		e.WriteString("{}")
