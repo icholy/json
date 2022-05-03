@@ -286,6 +286,7 @@ var hex = "0123456789abcdef"
 type encodeState struct {
 	bytes.Buffer // accumulated output
 	scratch      [64]byte
+	empty        bool
 
 	// Keep track of what pointers we've seen in the current recursive call
 	// path, to avoid cycles that could lead to a stack overflow. Only do
@@ -467,6 +468,7 @@ func invalidValueEncoder(e *encodeState, v reflect.Value, _ encOpts) {
 }
 
 func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	e.empty = false
 	if v.Kind() == reflect.Pointer && v.IsNil() {
 		e.WriteString("null")
 		return
@@ -480,6 +482,7 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	if err == nil {
 		if b == nil {
 			if opts.omitEmpty {
+				e.empty = true
 				return
 			}
 			_, err = e.WriteString("null")
@@ -494,6 +497,7 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 }
 
 func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
+	e.empty = false
 	va := v.Addr()
 	if va.IsNil() {
 		e.WriteString("null")
@@ -504,6 +508,7 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	if err == nil {
 		if b == nil {
 			if opts.omitEmpty {
+				e.empty = true
 				return
 			}
 			_, err = e.WriteString("null")
@@ -764,7 +769,7 @@ FieldLoop:
 		if f.omitEmpty && isEmptyValue(fv) {
 			continue
 		}
-		keyIdx := e.Len()
+		before := e.Len()
 		e.WriteByte(next)
 		if opts.escapeHTML {
 			e.WriteString(f.nameEscHTML)
@@ -773,10 +778,9 @@ FieldLoop:
 		}
 		opts.quoted = f.quoted
 		opts.omitEmpty = f.omitEmpty
-		valueIdx := e.Len()
 		f.encoder(e, fv, opts)
-		if e.Len() == valueIdx {
-			e.Truncate(keyIdx)
+		if e.empty {
+			e.Truncate(before)
 			continue
 		}
 		next = ','
