@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -218,6 +219,10 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 		dst.Write(src[start:])
 	}
 }
+
+// ErrEmpty is returned by Marshaler implementations when
+// ",omitempty" should omit their result.
+var ErrEmpty = errors.New("json: empty")
 
 // Marshaler is the interface implemented by types that
 // can marshal themselves into valid JSON.
@@ -479,17 +484,16 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		return
 	}
 	b, err := m.MarshalJSON()
-	if err == nil {
-		if b == nil {
-			if opts.omitEmpty {
-				e.empty = true
-				return
-			}
-			_, err = e.WriteString("null")
-		} else {
-			// copy JSON into buffer, checking validity.
-			err = compact(&e.Buffer, b, opts.escapeHTML)
+	if err == ErrEmpty {
+		if opts.omitEmpty {
+			e.empty = true
+			return
 		}
+		err = nil
+	}
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
@@ -505,17 +509,16 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	}
 	m := va.Interface().(Marshaler)
 	b, err := m.MarshalJSON()
-	if err == nil {
-		if b == nil {
-			if opts.omitEmpty {
-				e.empty = true
-				return
-			}
-			_, err = e.WriteString("null")
-		} else {
-			// copy JSON into buffer, checking validity.
-			err = compact(&e.Buffer, b, opts.escapeHTML)
+	if err == ErrEmpty {
+		if opts.omitEmpty {
+			e.empty = true
+			return
 		}
+		err = nil
+	}
+	if err == nil {
+		// copy JSON into buffer, checking validity.
+		err = compact(&e.Buffer, b, opts.escapeHTML)
 	}
 	if err != nil {
 		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})

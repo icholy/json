@@ -1204,7 +1204,9 @@ func TestMarshalerError(t *testing.T) {
 
 type MarshalNil struct{}
 
-func (MarshalNil) MarshalJSON() ([]byte, error) { return nil, nil }
+func (MarshalNil) MarshalJSON() ([]byte, error) {
+	return []byte("null"), ErrEmpty
+}
 
 func TestMarshalerReturnsNilBytes(t *testing.T) {
 	want := []byte("null")
